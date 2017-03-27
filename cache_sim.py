@@ -1,6 +1,10 @@
 import numpy as np
 #initialize main memory here
+global cache
+global main_mem 
+
 class memory:
+	
 	def __init__(self):
 		self.main_mem = self.make_mem()
 
@@ -15,6 +19,12 @@ class memory:
 	def get_block(self, block_begin_addr):
 		return self.main_mem[block_begin_addr : block_begin_addr + 0xf + 1]
 
+	def set_block(self, block_begin_addr, packet):
+		self.main_mem[block_begin_addr : block_begin_addr + 0xf + 1] = packet
+
+	def print_main_mem(self):
+		print self.main_mem
+
 
 class cache_row:
 	def __init__(self, slot):
@@ -22,8 +32,7 @@ class cache_row:
 		self.hit = 0
 		self.tag = 0
 		self.data = [0] * 16
-	# def __repr__(self):
-	# 	return "%s    %s     %s     %s"  % (self.slot, self.hit, self.tag, self.data)
+		self.current_block_begin = 0
 
 	def check_hit(self):
 		if self.hit == 1:
@@ -46,6 +55,12 @@ class cache_row:
 	def update_data(self, data):
 		self.data = data
 
+	def write_data(self, offset, write_data):
+		self.data[-offset] = write_data	## check if offset happens left or right
+
+	def update_begin_addr(self, begin_address):
+		self.current_block_begin = begin_address
+
 
 def parse_address(address):
 	slot_num = (address & 0x00f0)  >> 4
@@ -54,8 +69,7 @@ def parse_address(address):
 	tag = address >> 8
 	return slot_num, block_offset, block_begin_addr, tag
 
-
-def make_cache():
+def initialize_cache():
 	cache = []
 	for i in range(16):
 		row_temp = cache_row(i)
@@ -65,35 +79,64 @@ def make_cache():
 def display_cache():
 	vhex = np.vectorize(hex)
 	for i in range(len(cache)):
-		print vhex(cache[i].slot),  cache[i].hit,  cache[i].tag, vhex(cache[i].data)
+		print vhex(cache[i].slot),  cache[i].hit,  vhex(cache[i].tag), vhex(cache[i].data)
 
-def cache_read(slot_num, block_offset, block_begin_addr, tag):
+def cache_do(address, *write_data):
+	slot_num, block_offset, block_begin_addr, tag = parse_address(address)
+	for data in write_data:
+		input_data = data
 	packet = main_mem.get_block(block_begin_addr)
 	cache_row = cache[slot_num]
 	if cache_row.check_hit() == False:
-		print 'miss'
 		cache_row.change_hit()
 		cache_row.update_tag(tag)
 		cache_row.update_data(packet)
+		cache_row.update_begin_addr(block_begin_addr)
+		if write_data:
+			cache_row.write_data(block_offset, input_data)
 	else:
-		print 'hit'
 		if cache_row.check_tag(tag) == False:
-			print 'tag miss'
+			main_mem.set_block(cache_row.current_block_begin, cache_row.data)
+			
 			cache_row.update_tag(tag)
 			cache_row.update_data(packet)
+			cache_row.update_begin_addr(block_begin_addr)
+			if write_data:
+				cache_row.write_data(block_offset, input_data)
 		else:
-			print 'tag hit'
+			if write_data:
+				cache_row.write_data(block_offset, input_data)
 			pass
 
+cache = initialize_cache()
 main_mem = memory()
-cache = make_cache()
 
-read_array = [0x7a2, 0x2e, 0x2f, 0x3d5, 0x4d5]
-for hx in read_array:
-	slot_num, block_offset, block_begin_addr, tag = parse_address(hx)
-	cache_read(slot_num, block_offset, block_begin_addr, tag)
+def main():
+	rwd = raw_input("(R)ead, (W)rite, (D)isplay, (Q)uit:  ")
+	form_rwd = rwd.lower()
+	if form_rwd != 'q':
+		if form_rwd == 'd':
+			display_cache()
+		elif form_rwd == 'r':
+			read = raw_input("Enter Hex Address:  ")
+			read_int = int(read, 16)
+			cache_do(read_int)
+		elif form_rwd == 'w':
+			write = raw_input("Enter Hex Address:  ") 
+			write_int = int(write, 16)
+			value = raw_input("Enter New Data in Hex:  ")
+			value_int = int(value, 16)
+			cache_do(write_int, value_int)
+		main()
+	elif form_rwd == 'q':
+		return
+	else:
+		print "Entered the wrong value, try again - to Quit press q and enter"
+		main()
 
-display_cache()
+main()
+
+
 
 
 
