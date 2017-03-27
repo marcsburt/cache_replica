@@ -61,6 +61,9 @@ class cache_row:
 	def update_begin_addr(self, begin_address):
 		self.current_block_begin = begin_address
 
+	def show_value(self, offset):
+		print "Data Value ", hex(self.data[-offset])
+
 
 def parse_address(address):
 	slot_num = (address & 0x00f0)  >> 4
@@ -88,24 +91,35 @@ def cache_do(address, *write_data):
 	packet = main_mem.get_block(block_begin_addr)
 	cache_row = cache[slot_num]
 	if cache_row.check_hit() == False:
+		print 'At given address, there is a CACHE MISS -- pulling in data from MM'
 		cache_row.change_hit()
 		cache_row.update_tag(tag)
 		cache_row.update_data(packet)
+		cache_row.show_value(block_offset)
 		cache_row.update_begin_addr(block_begin_addr)
 		if write_data:
+			print 'Has changed to: '
 			cache_row.write_data(block_offset, input_data)
+			cache_row.show_value()
 	else:
 		if cache_row.check_tag(tag) == False:
+			print 'At given address, there is a CACHE MISS-- pulling in data from MM'
 			main_mem.set_block(cache_row.current_block_begin, cache_row.data)
-			
 			cache_row.update_tag(tag)
 			cache_row.update_data(packet)
+			cache_row.show_value(block_offset)
 			cache_row.update_begin_addr(block_begin_addr)
 			if write_data:
+				print 'Has changed to: '
 				cache_row.write_data(block_offset, input_data)
+				cache_row.show_value(block_offset)
 		else:
+			print 'At given address, there is a CACHE HIT'
+			cache_row.show_value(block_offset)
 			if write_data:
+				print 'Has changed to: '
 				cache_row.write_data(block_offset, input_data)
+				cache_row.show_value(block_offset)
 			pass
 
 cache = initialize_cache()
